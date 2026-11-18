@@ -20,12 +20,16 @@ pg.run()
 
 
 # ->Streamlit library dazu und ab jetzt st als abkürzung
-# St.set page config erlaubt das layout der app zu einstellen, page titel > setzt den titel social spending und layout wide sagt > Nutze verfügbare Breite. > Aber für den Browsertab
+# St.set page config erlaubt das layout der app zu einstellen, page titel-> setzt den titel social spending und layout wide sagt-> Nutze verfügbare Breite -> Aber für den Browsertab
 # St.session ist wie eine Datenbank, wo die user ID (beschriftung des Kontos) gespeichert wird und hier ist das if wenn die ID nicht vorhanden
-# -> Zeile von innen nach aussen lesen: st page -> heisst eine seite der Webseite Views/login.py bedeutet zeigt: wo der Code der Seite liegt im Ordner views und datei login.py, title sagt den titel der Seite St.navigation -> Liste. Zeigt die wie viele Elemente/Seiten bei einem bestimmten "Weg"/Zustand hat. Die login seite hat nur 1 Seite, deshalb 1 Element in der Liste Bei else haben wir bereits 4
-# -> 4 Seiten bei diesem "Weg" -> Zustand
+# -> Zeile von innen nach aussen lesen: st page -> heisst eine seite der Webseite
+# Views/login.py bedeutet zeigt: wo der Code der Seite liegt im Ordner views und datei login.py, title sagt den titel der Seite
+# St.navigation-> Liste. Zeigt die wie viele Elemente/Seiten bei einem bestimmten "Weg"/Zustand hat. Die login seite hat nur 1 Seite, deshalb 1 Element in der Liste
+# Bei else haben wir bereits 4
+# -> 4 Seiten bei diesem "Weg"-> Zustand
 # -> Bei diesem Zustand sehen wir 4 verschiedene Seiten (4x St. Page, gleicher Aufbau)
 # -> Für Sidebar-> Hier fragt Python als was wir eingeloggt sind und gibt dann den username ein
-# Wenn auf log out nicht geklickt wird der rest geskipt, Hingegen wenn er gedrückt wird
-# Die ID wird wie gelöscht webseite weiss nicht mehr wer du bist Rerun -> Am anfang zur login seite wird man geschickt
+# Wenn auf log out nicht gecklickt wird der rest geskippt, Hingegen wenn er gedrpückt wird
+# Die ID wird wie gelöscht webseite weiss nicht mehr wer du bist
+# Rerun-> Am anfang zur login seite wird man geschickt
 # -> Webseite zeigt hier auf das was man geclickt hat (wenn man nicht ausgeloggt ist)
