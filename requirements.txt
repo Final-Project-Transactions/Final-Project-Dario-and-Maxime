@@ -3,3 +3,4 @@ sqlalchemy>=2.0.0
 psycopg[binary]
 pandas
 bcrypt
+plotly
