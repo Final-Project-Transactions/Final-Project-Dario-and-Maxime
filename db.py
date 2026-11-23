@@ -16,7 +16,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 # Reads the [connections.neon] section of .streamlit/secrets.toml
-conn = st.connection("neon", type="sql")
+# Neon (Free plan) closes idle connections after about 5 minutes. pool_pre_ping
+# tests a connection before using it and opens a new one if it was closed,
+# so the first query after a pause doesn't crash ("SSL connection has been
+# closed unexpectedly"). pool_recycle replaces connections older than 4 min.
+conn = st.connection("neon", type="sql", pool_pre_ping=True, pool_recycle=240)
 
 
 # ----------------------------------------------------------------------
