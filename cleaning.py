@@ -11,12 +11,52 @@ Every bank exports differently, so the cleaning has to handle:
 - empty rows, empty merchant fields and rows that are not transactions
 """
 
+import csv
 import datetime as dt
+import io
 import re
+from collections import Counter
 
 import pandas as pd
 
 from categorize import categorize
+
+def read_bank_csv(file, sep):
+    """Read a bank CSV file -> (raw DataFrame, number of skipped info lines).
+
+    Many banks (e.g. UBS) put info lines above the real table (account
+    number, period, balance ...). We find the table ourselves: it is the
+    block of lines that all have the same, most common number of columns.
+    The first of those lines is the header.
+
+    Also handles the encoding: Swiss bank exports are not always UTF-8.
+    """
+    data = file.getvalue() if hasattr(file, "getvalue") else file.read()
+    for encoding in ["utf-8-sig", "cp1252", "latin-1"]:  # latin-1 never fails
+        try:
+            text = data.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+
+    lines = text.splitlines()
+    # Number of columns per line (the csv module handles quotes correctly)
+    widths = [len(row) for row in csv.reader(lines, delimiter=sep)]
+    table_widths = [w for w in widths if w >= 2]
+    if not table_widths:
+        raise ValueError("No table found. Is the separator right?")
+    width = Counter(table_widths).most_common(1)[0][0]
+    header_line = widths.index(width)
+
+    raw = pd.read_csv(
+        io.StringIO(text), sep=sep, skiprows=header_line,
+        on_bad_lines="skip",          # e.g. a total line at the end
+        dtype=str,                    # keep amounts as text, we clean them ourselves
+    )
+    raw = raw.dropna(axis=1, how="all")  # empty columns (trailing ";")
+    raw.columns = [str(c).strip() for c in raw.columns]
+    return raw, header_line
+
 
 # Date formats we try, in this order (Swiss formats first: day before month)
 DATE_FORMATS = ["%d.%m.%Y", "%d.%m.%y", "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"]
@@ -107,11 +147,14 @@ def clean_bank_csv(raw, col_date, col_merchant, col_amount, expenses_negative=Tr
     })
     n_start = len(df)
 
-    # 1. Rows without a readable date or amount are not transactions
-    #    (empty lines, totals, "Saldo" lines ...)
-    bad = df["date"].isna() | df["amount"].isna()
-    n_unreadable = int(bad.sum())
-    df = df[~bad]
+    # 1. Rows without a readable date are not transactions (empty lines,
+    #    totals ...). Rows with a date but no amount in this column are
+    #    usually income, when the bank has separate debit/credit columns (UBS).
+    no_date = df["date"].isna()
+    no_amount = ~no_date & df["amount"].isna()
+    n_unreadable = int(no_date.sum())
+    n_no_amount = int(no_amount.sum())
+    df = df[~no_date & ~no_amount]
 
     # 2. Keep only expenses and make them positive
     if expenses_negative:
@@ -128,8 +171,11 @@ def clean_bank_csv(raw, col_date, col_merchant, col_amount, expenses_negative=Tr
     n_future = int(future.sum())
     df = df[~future]
 
-    # 4. Merchant: clean text, "Unknown" if empty
-    merchant = df["merchant"].astype("string").str.strip()
+    # 4. Merchant: clean text, "Unknown" if empty.
+    #    Banks add details after a ";" (UBS: "Coop-1098 ZH;8037 Zürich",
+    #    "MCDONALDS ZUERICH; Zahlung UBS TWINT"), we keep the part before it.
+    merchant = df["merchant"].astype("string").str.split(";").str[0]
+    merchant = merchant.str.strip(" ,")  # UBS TWINT: ", PAPI" -> "PAPI"
     merchant = merchant.str.replace(r"\s+", " ", regex=True)  # double spaces
     df["merchant"] = merchant.replace("", pd.NA).fillna("Unknown").astype(str)
 
@@ -143,6 +189,7 @@ def clean_bank_csv(raw, col_date, col_merchant, col_amount, expenses_negative=Tr
         "rows_in_file": n_start,
         "kept": len(df),
         "unreadable": n_unreadable,
+        "no_amount": n_no_amount,
         "income_or_refund": n_income,
         "zero": n_zero,
         "future": n_future,
