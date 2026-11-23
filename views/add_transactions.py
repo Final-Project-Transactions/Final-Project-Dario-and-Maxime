@@ -5,6 +5,7 @@ import streamlit as st
 
 import db  # Maximes Datenbank
 from categorize import categorize  # Von der Datei categorize, nimm die Funktion categorize heraus
+from cleaning import clean_bank_csv, guess_expenses_negative  # Maximes Data Cleaning
 
 user_id = st.session_state["user_id"]  # Notizzettel
 st.title("Add transactions")
@@ -41,11 +42,39 @@ with tab_csv:  # -> Alles innerhalb
         col_merchant = c2.selectbox("Merchant column", cols)
         col_amount = c3.selectbox("Amount column", cols)  # Selectbox-> für dropdowns
 
-        # Data Cleaning von Maxime
-        df = None
+        # Data Cleaning von Maxime (the logic is in cleaning.py)
+        if len({col_date, col_merchant, col_amount}) < 3:
+            st.warning("Please choose three different columns.")
+            st.stop()
 
-        if df is None:
-            st.info("Data cleaning is coming soon.")
+        # Most banks write expenses as negative numbers. We guess from the
+        # file, and the user can correct it.
+        guessed = guess_expenses_negative(raw, col_amount)
+        sign = st.radio(
+            "In your file, expenses are ...",
+            ["negative numbers (e.g. -12.50)", "positive numbers (e.g. 12.50)"],
+            index=0 if guessed else 1, horizontal=True,
+        )
+        df, report = clean_bank_csv(
+            raw, col_date, col_merchant, col_amount,
+            expenses_negative=sign.startswith("negative"),
+        )
+
+        # Tell the user which rows were left out and why
+        skipped = []
+        if report["unreadable"]:
+            skipped.append(f"{report['unreadable']} without a readable date or amount")
+        if report["income_or_refund"]:
+            skipped.append(f"{report['income_or_refund']} income or refunds")
+        if report["zero"]:
+            skipped.append(f"{report['zero']} with amount 0")
+        if report["future"]:
+            skipped.append(f"{report['future']} with a date in the future")
+        if skipped:
+            st.caption(f"{report['rows_in_file']} rows in the file. Left out: " + ", ".join(skipped) + ".")
+
+        if df.empty:
+            st.error("No expenses found. Check the column choice and the setting above.")
             st.stop()
 
         st.write("Check the categories and correct them if needed:")
