@@ -138,6 +138,29 @@ def delete_transaction(transaction_id, user_id):
     )
 
 
+def delete_transactions(transaction_ids, user_id):
+    """Delete several transactions at once. Only the ones that belong to
+    user_id are deleted, even if other ids are passed in."""
+    if not transaction_ids:
+        return
+    _write(
+        "DELETE FROM transactions WHERE id = ANY(:ids) AND user_id = :u",
+        {"ids": [int(i) for i in transaction_ids], "u": user_id},
+    )
+
+
+def delete_all_transactions(user_id):
+    """Delete ALL transactions of one user. The account itself stays."""
+    _write("DELETE FROM transactions WHERE user_id = :u", {"u": user_id})
+
+
+def delete_user(user_id):
+    """Delete a user account. Thanks to ON DELETE CASCADE in schema.sql this
+    also deletes the user's transactions, friendships and group memberships.
+    Groups the user created stay (created_by becomes NULL)."""
+    _write("DELETE FROM users WHERE id = :u", {"u": user_id})
+
+
 # ----------------------------------------------------------------------
 # Friendships
 # A row (user_id=A, friend_id=B) means "A sent B a request".
