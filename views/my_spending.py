@@ -43,8 +43,23 @@ st.plotly_chart(fig_month)
 
 # ---------- Teil F: Alle Transaktionen ----------
 with st.expander("All transactions"):
-    st.dataframe(view.drop(columns=["month"]).sort_values("date", ascending=False),
-                 hide_index=True)
+    table = view.drop(columns=["month"]).sort_values("date", ascending=False)
+    table.insert(0, "delete", False)  # checkbox column, ticked = delete this row
+
+    # The key changes after every delete, so old ticks don't jump to other rows
+    st.session_state.setdefault("editor_version", 0)
+    edited = st.data_editor(
+        table, hide_index=True,
+        column_order=["delete", "date", "merchant", "amount", "category", "source"],
+        disabled=["date", "merchant", "amount", "category", "source"],
+        key=f"tx_editor_{st.session_state['editor_version']}",
+    )
+    to_delete = edited.loc[edited["delete"], "id"].tolist()
+    if st.button(f"Delete {len(to_delete)} selected", disabled=not to_delete):
+        db.delete_transactions(to_delete, user_id)
+        st.session_state["editor_version"] += 1
+        st.rerun()
+    st.caption("To delete all your transactions or your account, go to 'Account'.")
 
 # Nur als Titel als Platzhalter. Der rest kommt wie später-> Dient dazu, dass wir wissen dass das Login funktioniert
 # -> Hier definiert man die Anfang der Webseite

@@ -10,6 +10,7 @@ else:
         st.Page("views/add_transactions.py", title="Add transactions"),
         st.Page("views/friends_groups.py", title="Friends & groups"),
         st.Page("views/compare.py", title="Compare"),
+        st.Page("views/account.py", title="Account"),
     ])
     st.sidebar.write(f"Logged in as **{st.session_state['username']}**")
     if st.sidebar.button("Log out"):

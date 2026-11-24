@@ -16,7 +16,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 # Reads the [connections.neon] section of .streamlit/secrets.toml
-conn = st.connection("neon", type="sql")
+# Neon (Free plan) closes idle connections after about 5 minutes. pool_pre_ping
+# tests a connection before using it and opens a new one if it was closed,
+# so the first query after a pause doesn't crash ("SSL connection has been
+# closed unexpectedly"). pool_recycle replaces connections older than 4 min.
+conn = st.connection("neon", type="sql", pool_pre_ping=True, pool_recycle=240)
 
 
 # ----------------------------------------------------------------------
@@ -153,6 +157,29 @@ def delete_transaction(transaction_id, user_id):
         "DELETE FROM transactions WHERE id = :t AND user_id = :u",
         {"t": transaction_id, "u": user_id},
     )
+
+
+def delete_transactions(transaction_ids, user_id):
+    """Delete several transactions at once. Only the ones that belong to
+    user_id are deleted, even if other ids are passed in."""
+    if not transaction_ids:
+        return
+    _write(
+        "DELETE FROM transactions WHERE id = ANY(:ids) AND user_id = :u",
+        {"ids": [int(i) for i in transaction_ids], "u": user_id},
+    )
+
+
+def delete_all_transactions(user_id):
+    """Delete ALL transactions of one user. The account itself stays."""
+    _write("DELETE FROM transactions WHERE user_id = :u", {"u": user_id})
+
+
+def delete_user(user_id):
+    """Delete a user account. Thanks to ON DELETE CASCADE in schema.sql this
+    also deletes the user's transactions, friendships and group memberships.
+    Groups the user created stay (created_by becomes NULL)."""
+    _write("DELETE FROM users WHERE id = :u", {"u": user_id})
 
 
 # ----------------------------------------------------------------------

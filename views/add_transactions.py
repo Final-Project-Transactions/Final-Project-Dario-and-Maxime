@@ -5,6 +5,7 @@ import streamlit as st
 
 import db  # Maximes Datenbank
 from categorize import categorize  # Von der Datei categorize, nimm die Funktion categorize heraus
+from cleaning import clean_bank_csv, guess_expenses_negative, read_bank_csv  # Maximes Data Cleaning
 
 user_id = st.session_state["user_id"]  # Notizzettel
 st.title("Add transactions")
@@ -30,7 +31,13 @@ with tab_csv:  # -> Alles innerhalb
     uploaded = st.file_uploader("Bank export (CSV)", type="csv")  # -> Ein Feld zum hochladen und nur CSV Files
     if uploaded is not None:
         sep = st.radio("Separator", [";", ","], horizontal=True)  # Runde Knöpfe und nur eine kann man auswählen kann und sind horizontal-> nebeneinander
-        raw = pd.read_csv(uploaded, sep=sep)
+        try:
+            raw, skipped_lines = read_bank_csv(uploaded, sep)  # Maximes Funktion in cleaning.py
+        except Exception:
+            st.error("Couldn't read this file. Try the other separator.")
+            st.stop()
+        if skipped_lines:
+            st.caption(f"Skipped {skipped_lines} info lines at the top of the file.")
         st.write("Preview of your file:")  # -> Vorschau einer Datei
         st.dataframe(raw.head(), hide_index=True)  # -> Beim Preview nur die ersten 5 Zeilen sollen gezeigt werden und der index soll nicht gezeigt werden
 
@@ -41,22 +48,55 @@ with tab_csv:  # -> Alles innerhalb
         col_merchant = c2.selectbox("Merchant column", cols)
         col_amount = c3.selectbox("Amount column", cols)  # Selectbox-> für dropdowns
 
-        # Data Cleaning von Maxime
-        df = None
-
-        if df is None:
-            st.info("Data cleaning is coming soon.")
+        # Data Cleaning von Maxime (the logic is in cleaning.py)
+        if len({col_date, col_merchant, col_amount}) < 3:
+            st.warning("Please choose three different columns.")
             st.stop()
 
-        st.write("Check the categories and correct them if needed:")
+        # Most banks write expenses as negative numbers. We guess from the
+        # file, and the user can correct it.
+        guessed = guess_expenses_negative(raw, col_amount)
+        sign = st.radio(
+            "In your file, expenses are ...",
+            ["negative numbers (e.g. -12.50)", "positive numbers (e.g. 12.50)"],
+            index=0 if guessed else 1, horizontal=True,
+        )
+        df, report = clean_bank_csv(
+            raw, col_date, col_merchant, col_amount,
+            expenses_negative=sign.startswith("negative"),
+        )
+
+        # Tell the user which rows were left out and why
+        skipped = []
+        if report["unreadable"]:
+            skipped.append(f"{report['unreadable']} without a readable date")
+        if report["no_amount"]:
+            skipped.append(f"{report['no_amount']} with no amount in this column (e.g. income)")
+        if report["income_or_refund"]:
+            skipped.append(f"{report['income_or_refund']} income or refunds")
+        if report["zero"]:
+            skipped.append(f"{report['zero']} with amount 0")
+        if report["future"]:
+            skipped.append(f"{report['future']} with a date in the future")
+        if skipped:
+            st.caption(f"{report['rows_in_file']} rows in the file. Left out: " + ", ".join(skipped) + ".")
+
+        if df.empty:
+            st.error("No expenses found. Check the column choice and the setting above.")
+            st.stop()
+
+        st.write("Check the categories and correct them if needed. "
+                 "Untick rows that are not spending, e.g. transfers to your own accounts:")
+        df.insert(0, "import", True)  # checkbox column: ticked = import this row
         edited = st.data_editor(
             df, hide_index=True,
             column_config={"category": st.column_config.SelectboxColumn(
                 "category", options=db.get_categories(), required=True)},
             disabled=["date", "merchant", "amount"],
         )
-        if st.button(f"Import {len(edited)} transactions"):
-            n = db.add_transactions_bulk(user_id, edited, source="bank")
+        chosen = edited[edited["import"]].drop(columns="import")
+        if st.button(f"Import {len(chosen)} transactions", disabled=chosen.empty):
+            n = db.add_transactions_bulk(user_id, chosen, source="bank")
             st.success(f"{n} transactions saved.")
 
 # Nur als Titel als Platzhalter. Der rest kommt wie später-> Dient dazu, dass wir wissen dass das Login funktioniert
