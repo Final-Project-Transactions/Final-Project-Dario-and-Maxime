@@ -9,12 +9,19 @@ me = st.session_state["user_id"]  # -> Die Nutzernummer (wie Notizzettel)
 st.title("Compare")
 
 # ---------- Teil A: Mit wem vergleichen? ----------
-choice = st.radio("Compare me with", ["All users", "My friends", "A group"], horizontal=True)  # -> Oberer Balken wo man dann wählen kann
+choice = st.radio("Compare me with", ["All users", "My friends", "A group", "Same household type"], horizontal=True)  # -> Oberer Balken wo man dann wählen kann
 if choice == "All users":  # -> Wen man auf all users klickt
     ids = db.get_all_user_ids()  # -> Gib mir alle Nutzer
 elif choice == "My friends":  # -> Wenn man auf my friends klickt
     friends = db.get_friends(me)
     ids = friends["id"].tolist()  # -> Erstelle mir eine Liste aus der Nutzerdatenbank die als Freunde aufgelistet sind
+elif choice == "Same household type":
+    household = db.get_household_type(me)
+    if household is None:
+        st.info("Your account has no household type.")
+        st.stop()
+    st.caption(f"Your household type: **{household}**")
+    ids = db.get_user_ids_by_household(household)
 else:
     groups = db.get_user_groups(me)  # -> Hole alle Gruppen in denen ich bin
     if groups.empty:
@@ -39,9 +46,9 @@ st.write(f"You spend more than **{res['percentile']:.0f}%** of the "
          f"{res['n']} people in this comparison.")
 
 # ---------- Teil C: Rangliste (Freunde/Gruppe) oder Verteilung (alle) ----------
-if choice == "All users":
+if choice in ("All users", "Same household type"):
     fig = px.histogram(res["group_totals"], nbins=30,  # Für Balken
-                       labels={"value": "CHF per month"}, title="All users")
+                       labels={"value": "CHF per month"}, title=choice)
     fig.add_vline(x=res["my_total"], line_color="crimson", annotation_text="Me")  # -> Senkrechte Linie einzeichnen
     fig.add_vline(x=res["mean"], line_dash="dash", annotation_text="Mean")  # -> Linie beim Durchschnitt
     fig.add_vline(x=res["median"], line_dash="dot", annotation_text="Median",  # -> Dat macht Linie gestrichelt und dot gepunktet
