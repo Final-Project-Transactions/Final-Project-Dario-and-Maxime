@@ -83,6 +83,23 @@ def search_users(search_text, exclude_user_id):
         params={"q": f"%{search_text}%", "me": exclude_user_id}, ttl=0,
     )
 
+def get_household_type(user_id):
+    """Household type of one user ('student', 'single', ...), or None."""
+    df = conn.query(
+        "SELECT household_type FROM users WHERE id = :id",
+        params={"id": user_id}, ttl=0,
+    )
+    value = None if df.empty else df["household_type"].iloc[0]
+    # A NULL from the database can arrive as None or NaN -> always give None
+    return value if isinstance(value, str) else None
+
+
+def get_user_ids_by_household(household_type):
+    """Ids of all users with this household type - for 'compare with the same household type'."""
+    return conn.query(
+        "SELECT id FROM users WHERE household_type = :h",
+        params={"h": household_type}, ttl=0,
+    )["id"].tolist()
 
 # ----------------------------------------------------------------------
 # Transactions
